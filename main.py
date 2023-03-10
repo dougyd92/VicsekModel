@@ -5,6 +5,7 @@ from typing import Any
 from matplotlib.animation import FFMpegWriter, FuncAnimation
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 
 class Agent:
   def __init__(
@@ -17,6 +18,7 @@ class Agent:
     self.y = height * np.random.rand()
     self.speed = speed
     self.heading = 2 * np.pi * np.random.rand()
+    self.new_heading = 0
   
 
 class Vicsek:
@@ -41,24 +43,57 @@ class Vicsek:
   def run(self, delta_t: float, duration: float):
     t = 0
     history = []
-    while t <= duration:
+    for t in tqdm(np.arange(0, duration+delta_t, delta_t)):
+      # Update headings to align with neighbors
       for a in self.agents:
+        # Get average heading of neighbors (including self)
+        neighbor_count = 0
+        heading_sum_x = 0
+        heading_sum_y = 0
+        for b in self.agents:
+          distance = self.toroidal_distance(a, b)
+          if distance <= self.neighborhood_radius:
+            neighbor_count += 1
+            heading_sum_x += np.cos(b.heading)
+            heading_sum_y += np.sin(b.heading)
+        avg_heading = np.arctan2(heading_sum_y / neighbor_count, heading_sum_x / neighbor_count)
+        noise = np.random.uniform(-np.pi, np.pi) * self.noise_intensity
+        # Don't update a.heading yet, as the neighbor's updates still depend on it
+        a.new_heading = avg_heading + noise
+
+      # Update positions with new velocity
+      for a in self.agents:
+        a.heading = a.new_heading
         a.x = (a.x + a.speed * delta_t * np.cos(a.heading)) % self.width
         a.y = (a.y + a.speed * delta_t * np.sin(a.heading)) % self.height
+
       history.append({
          'x': [a.x for a in self.agents],
          'y': [a.y for a in self.agents],
          'heading': [a.heading for a in self.agents],
          't': t
       })
-      t += delta_t
     return history
+
+  def toroidal_distance(self, agent1: Agent, agent2: Agent):
+    """
+    Compute the distance between two agents, while taking the toroidal geometry
+    into account. (i.e. agents on the far left and right edges will count as
+    neighbors)
+    """
+    dx = abs(agent1.x - agent2.x)
+    if dx > self.width:
+      dx = self.width - dx
+    dy = abs(agent1.y - agent2.y)
+    if dy > self.height:
+      dy = self.height - dy
+    return np.sqrt(dx**2 + dy**2)
 
 
 def animation_step(i: int, ax: Any, text: Any, history: list[np.ndarray]) -> Any:
     for quiver in ax.collections:
       quiver.remove()
-    ax.quiver(history[i]['x'],history[i]['y'],np.cos(history[i]['heading']),np.sin(history[i]['heading']))
+    ax.quiver(history[i]['x'], history[i]['y'], np.cos(history[i]['heading']),np.sin(history[i]['heading']), pivot='mid')
     text.set_text(f"t={history[i]['t']:.2f}")
     return [ax]
 
@@ -112,8 +147,10 @@ def main() -> None:
     neighborhood_radius,
     noise_intensity)
 
+  print(f"Running simulation with {n_agents} agents for {duration / delta_t} time steps...")
   history = sim.run(delta_t, duration)
 
+  print(f"Simulation complete. Generating animation...")
   annotation = f"# agents: {n_agents}\nEnvironment size: {width}x{height}\nEta: {noise_intensity}"
   animate(width, height, history, delta_t, annotation, save_to_file)
 
