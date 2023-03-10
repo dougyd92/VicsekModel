@@ -68,12 +68,14 @@ def animate(
     height: int,
     history: list[np.ndarray],
     delta_t: float,
+    annotation: str,
     save_to_file: bool
 ) -> None:
     fig, ax = plt.subplots(figsize = (width, height))
     ax.set_xlim(0, width)
     ax.set_ylim(0, height)
-    text = ax.annotate("t=", (0.5, -0.5), fontsize="x-large", annotation_clip=False)
+    text = ax.annotate("t=", (width-1, -0.5), fontsize="x-large", annotation_clip=False, va='top')
+    ax.annotate(annotation, (0, -0.5), fontsize="x-large", annotation_clip=False, va='top')
     ax.quiver(history[0]['x'],history[0]['y'],np.cos(history[0]['heading']),np.sin(history[0]['heading']))
     anim = FuncAnimation(
       fig,
@@ -100,7 +102,7 @@ def main() -> None:
   speed = config["Agent"].getfloat("speed")
   neighborhood_radius = config["Agent"].getfloat("neighborhood_radius")
   noise_intensity = config["Agent"].getfloat("noise_intensity")
-  save_to_file = config["Animation"].getfloat("save_to_file")
+  save_to_file = config["Animation"].getboolean("save_to_file")
 
   sim = Vicsek(    
     width,
@@ -111,7 +113,9 @@ def main() -> None:
     noise_intensity)
 
   history = sim.run(delta_t, duration)
-  animate(width, height, history, delta_t, save_to_file)
+
+  annotation = f"# agents: {n_agents}\nEnvironment size: {width}x{height}\nEta: {noise_intensity}"
+  animate(width, height, history, delta_t, annotation, save_to_file)
 
 if __name__ == "__main__":
     main()
